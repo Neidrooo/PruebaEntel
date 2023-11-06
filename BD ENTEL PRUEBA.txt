@@ -1,0 +1,282 @@
+-----------------------------------------------------------------------
+-----------------------------------------------------------------------
+
+
+
+--CREAR LA BASE DE DATOS
+
+
+
+-----------------------------------------------------------------------
+-----------------------------------------------------------------------
+CREATE DATABASE RentaCar;
+GO
+USE RentaCar;
+GO
+
+CREATE TABLE Vendedor (
+    idVendedor INT IDENTITY(1,1) PRIMARY KEY,
+    nombre VARCHAR(255) NOT NULL
+);
+GO
+CREATE TABLE MarcaAuto (
+    idMarca INT IDENTITY(1,1) PRIMARY KEY,
+    nombre VARCHAR(255) NOT NULL
+);
+GO
+CREATE TABLE ModeloAuto (
+    idModelo INT IDENTITY(1,1) PRIMARY KEY,
+    idMarca INT NOT NULL,
+    nombre VARCHAR(255) NOT NULL,
+    CONSTRAINT FK_ModeloAuto_MarcaAuto FOREIGN KEY (idMarca) REFERENCES MarcaAuto(idMarca)
+);
+GO
+CREATE TABLE Solicitudes (
+    idSolicitud INT IDENTITY(1,1) PRIMARY KEY,
+    idVendedor INT NOT NULL,
+    idModelo INT NOT NULL,
+    fecha DATETIME NOT NULL,
+    monto MONEY NOT NULL CHECK (monto > 0),
+    CONSTRAINT FK_Solicitudes_Vendedor FOREIGN KEY (idVendedor) REFERENCES Vendedor(idVendedor),
+    CONSTRAINT FK_Solicitudes_ModeloAuto FOREIGN KEY (idModelo) REFERENCES ModeloAuto(idModelo)
+);
+GO
+-----------------------------------------------------------------------
+-----------------------------------------------------------------------
+
+
+
+--CREACION DE  PROCEDIMIENTOS ALMACENADOS
+
+
+
+-----------------------------------------------------------------------
+-----------------------------------------------------------------------
+CREATE PROCEDURE TopTresMarcasSolicitadas AS
+	BEGIN
+		SELECT TOP(3) CONCAT(m.nombre,' - Solicitudes: ',COUNT(*) )AS 'Top Tres Marcas Solicitadas'
+		FROM MarcaAuto m
+		JOIN ModeloAuto mo ON m.idMarca = mo.idMarca
+		JOIN Solicitudes s ON mo.idModelo = s.idModelo
+		GROUP BY m.nombre
+		ORDER BY COUNT(*) DESC
+	END;
+GO
+CREATE PROCEDURE SolicitudesMesActual AS
+	BEGIN
+		SELECT
+			v.nombre AS Vendedor,
+			ma.nombre AS Marca,
+			mo.nombre AS Modelo,
+			FORMAT(s.fecha, 'dd/MM/yyyy') AS Fecha,
+			FORMAT(s.monto, 'C', 'es-CL') AS Monto
+		FROM
+			Solicitudes s
+			INNER JOIN Vendedor v ON s.idVendedor = v.idVendedor
+			INNER JOIN ModeloAuto mo ON s.idModelo = mo.idModelo
+			INNER JOIN MarcaAuto ma ON mo.idMarca = ma.idMarca
+		WHERE
+			MONTH(s.fecha) = MONTH(GETDATE())
+			AND YEAR(s.fecha) = YEAR(GETDATE())
+	END;
+
+GO
+CREATE PROCEDURE VendedorConMenosSolicitudes AS
+	BEGIN
+		DECLARE @FechaInicio DATETIME = DATEADD(DAY, -30, GETDATE());
+
+		SELECT TOP 1 
+			CONCAT(v.nombre, ' - Solicitudes: ', CAST(COUNT(s.idSolicitud) AS VARCHAR)) AS Reporte
+		FROM 
+			Vendedor v
+		JOIN 
+			Solicitudes s ON v.idVendedor = s.idVendedor
+		WHERE 
+			s.fecha >= @FechaInicio
+		GROUP BY 
+			v.idVendedor, v.nombre
+		ORDER BY 
+			COUNT(s.idSolicitud) ASC
+	END
+GO
+CREATE PROCEDURE ModelosSinSolicitudes AS
+	BEGIN
+		SELECT 
+			CONCAT(ma.nombre,' ',
+			mo.nombre) as 'Modelos sin solicitudes'
+		FROM 
+			ModeloAuto mo
+			JOIN MarcaAuto ma ON mo.idMarca = ma.idMarca -- Esto asocia cada modelo con su marca
+			LEFT JOIN Solicitudes s ON mo.idModelo = s.idModelo
+		WHERE 
+			s.idModelo IS NULL
+		ORDER BY 1 ASC-- Esto filtra para obtener solo los modelos que no tienen solicitudes
+	END;
+GO
+CREATE PROCEDURE TresMesesConMasVentas AS
+	BEGIN
+		SELECT TOP 3 
+			CONCAT(
+				CASE MONTH(fecha)
+					WHEN 1 THEN 'Enero'
+					WHEN 2 THEN 'Febrero'
+					WHEN 3 THEN 'Marzo'
+					WHEN 4 THEN 'Abril'
+					WHEN 5 THEN 'Mayo'
+					WHEN 6 THEN 'Junio'
+					WHEN 7 THEN 'Julio'
+					WHEN 8 THEN 'Agosto'
+					WHEN 9 THEN 'Septiembre'
+					WHEN 10 THEN 'Octubre'
+					WHEN 11 THEN 'Noviembre'
+					WHEN 12 THEN 'Diciembre'
+				END,
+				' ',
+				YEAR(fecha),
+				' - ',
+				FORMAT(SUM(monto), 'C', 'es-CL')
+			) AS Resultado
+		FROM Solicitudes
+		GROUP BY YEAR(fecha), MONTH(fecha)
+		ORDER BY SUM(monto) DESC
+	END;
+GO
+-----------------------------------------------------------------------
+-----------------------------------------------------------------------
+
+
+
+--INSERCIONES PARA PROBAR PROCEDIMIENTOS ALMACENADOS
+
+
+
+-----------------------------------------------------------------------
+-----------------------------------------------------------------------
+
+
+-- Insertar datos en la tabla MarcaAuto
+INSERT INTO MarcaAuto (nombre) VALUES ('Toyota');
+INSERT INTO MarcaAuto (nombre) VALUES ('Ford');
+INSERT INTO MarcaAuto (nombre) VALUES ('Chevrolet');
+INSERT INTO MarcaAuto (nombre) VALUES ('Honda');
+INSERT INTO MarcaAuto (nombre) VALUES ('Nissan');
+INSERT INTO MarcaAuto (nombre) VALUES ('Volkswagen');
+INSERT INTO MarcaAuto (nombre) VALUES ('BMW');
+INSERT INTO MarcaAuto (nombre) VALUES ('Mercedes-Benz');
+INSERT INTO MarcaAuto (nombre) VALUES ('Audi');
+INSERT INTO MarcaAuto (nombre) VALUES ('Hyundai');
+GO
+
+-- Insertar datos en la tabla ModeloAuto
+-- Toyota
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'Corolla' FROM MarcaAuto WHERE nombre = 'Toyota';
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'Camry' FROM MarcaAuto WHERE nombre = 'Toyota';
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'RAV4' FROM MarcaAuto WHERE nombre = 'Toyota';
+-- Ford
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'Fiesta' FROM MarcaAuto WHERE nombre = 'Ford';
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'Mustang' FROM MarcaAuto WHERE nombre = 'Ford';
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'Explorer' FROM MarcaAuto WHERE nombre = 'Ford';
+
+-- Chevrolet
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'Cruze' FROM MarcaAuto WHERE nombre = 'Chevrolet';
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'Malibu' FROM MarcaAuto WHERE nombre = 'Chevrolet';
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'Silverado' FROM MarcaAuto WHERE nombre = 'Chevrolet';
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'Equinox' FROM MarcaAuto WHERE nombre = 'Chevrolet';
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'Suburban' FROM MarcaAuto WHERE nombre = 'Chevrolet';
+
+-- Honda
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'Civic' FROM MarcaAuto WHERE nombre = 'Honda';
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'Accord' FROM MarcaAuto WHERE nombre = 'Honda';
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'CR-V' FROM MarcaAuto WHERE nombre = 'Honda';
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'Pilot' FROM MarcaAuto WHERE nombre = 'Honda';
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'Fit' FROM MarcaAuto WHERE nombre = 'Honda';
+
+-- Nissan
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'Altima' FROM MarcaAuto WHERE nombre = 'Nissan';
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'Sentra' FROM MarcaAuto WHERE nombre = 'Nissan';
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'Maxima' FROM MarcaAuto WHERE nombre = 'Nissan';
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'Rogue' FROM MarcaAuto WHERE nombre = 'Nissan';
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'Murano' FROM MarcaAuto WHERE nombre = 'Nissan';
+
+-- Volkswagen
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'Golf' FROM MarcaAuto WHERE nombre = 'Volkswagen';
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'Passat' FROM MarcaAuto WHERE nombre = 'Volkswagen';
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'Tiguan' FROM MarcaAuto WHERE nombre = 'Volkswagen';
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'Jetta' FROM MarcaAuto WHERE nombre = 'Volkswagen';
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'Atlas' FROM MarcaAuto WHERE nombre = 'Volkswagen';
+
+-- BMW
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, '3 Series' FROM MarcaAuto WHERE nombre = 'BMW';
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, '5 Series' FROM MarcaAuto WHERE nombre = 'BMW';
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'X5' FROM MarcaAuto WHERE nombre = 'BMW';
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'X3' FROM MarcaAuto WHERE nombre = 'BMW';
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, '1 Series' FROM MarcaAuto WHERE nombre = 'BMW';
+
+-- Mercedes-Benz
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'C-Class' FROM MarcaAuto WHERE nombre = 'Mercedes-Benz';
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'E-Class' FROM MarcaAuto WHERE nombre = 'Mercedes-Benz';
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'S-Class' FROM MarcaAuto WHERE nombre = 'Mercedes-Benz';
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'GLC' FROM MarcaAuto WHERE nombre = 'Mercedes-Benz';
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'GLE' FROM MarcaAuto WHERE nombre = 'Mercedes-Benz';
+
+-- Audi
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'A3' FROM MarcaAuto WHERE nombre = 'Audi';
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'A4' FROM MarcaAuto WHERE nombre = 'Audi';
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'A6' FROM MarcaAuto WHERE nombre = 'Audi';
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'Q5' FROM MarcaAuto WHERE nombre = 'Audi';
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'Q7' FROM MarcaAuto WHERE nombre = 'Audi';
+
+-- Hyundai
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'Elantra' FROM MarcaAuto WHERE nombre = 'Hyundai';
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'Sonata' FROM MarcaAuto WHERE nombre = 'Hyundai';
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'Tucson' FROM MarcaAuto WHERE nombre = 'Hyundai';
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'Santa Fe' FROM MarcaAuto WHERE nombre = 'Hyundai';
+INSERT INTO ModeloAuto (idMarca, nombre) SELECT idMarca, 'Kona' FROM MarcaAuto WHERE nombre = 'Hyundai';
+
+GO
+-- Insertar datos en la tabla Vendedor
+DECLARE @i INT = 1;
+WHILE @i <= 10
+BEGIN
+  INSERT INTO Vendedor (nombre) 
+  VALUES (CONCAT('Vendedor ', @i));
+  SET @i = @i + 1;
+END;
+GO
+
+-- Insertar datos en la tabla Solicitudes
+-- Aquí insertaremos datos con vendedores, modelos y fechas aleatorias
+DECLARE @i INT = 1;
+SET @i = 1;
+DECLARE @idVendedor INT, @idModelo INT, @fecha DATETIME, @monto MONEY, @numModelos INT;
+SELECT @numModelos = COUNT(*) FROM ModeloAuto;
+
+WHILE @i <= 100
+BEGIN
+  SET @idVendedor = 1 + (RAND() * 10); -- Suponiendo que hay 10 vendedores
+  SET @idModelo = 1 + (RAND() * @numModelos); -- Número de modelos basado en la tabla ModeloAuto
+  SET @fecha = DATEADD(day, CAST(RAND() * 365 AS INT), GETDATE() - 365); -- Fechas aleatorias en el último año
+  SET @monto = 20000 + (RAND() * (50000 - 20000)); -- Montos aleatorios entre 20.000 y 50.000
+  INSERT INTO Solicitudes (idVendedor, idModelo, fecha, monto) 
+  VALUES (@idVendedor, @idModelo, @fecha, @monto);
+  SET @i = @i + 1;
+END;
+GO
+
+------SI EL SCRIPT NO FUNCIONA EJECUTAR ESTE CODIGO
+--DELETE FROM ModeloAuto;
+--DELETE FROM MarcaAuto;
+--DELETE FROM Solicitudes;
+--DELETE FROM Vendedor;
+
+---- Restablecer el contador de identidad para la tabla Vendedor
+--DBCC CHECKIDENT ('Vendedor', RESEED, 0);
+
+---- Restablecer el contador de identidad para la tabla MarcaAuto
+--DBCC CHECKIDENT ('MarcaAuto', RESEED, 0);
+
+---- Restablecer el contador de identidad para la tabla ModeloAuto
+--DBCC CHECKIDENT ('ModeloAuto', RESEED, 0);
+
+---- Restablecer el contador de identidad para la tabla Solicitudes
+--DBCC CHECKIDENT ('Solicitudes', RESEED, 0);
