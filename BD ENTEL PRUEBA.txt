@@ -36,7 +36,7 @@ CREATE TABLE Solicitudes (
     idVendedor INT NOT NULL,
     idModelo INT NOT NULL,
     fecha DATETIME NOT NULL,
-    monto MONEY NOT NULL CHECK (monto > 0),
+    monto INT NOT NULL,
     CONSTRAINT FK_Solicitudes_Vendedor FOREIGN KEY (idVendedor) REFERENCES Vendedor(idVendedor),
     CONSTRAINT FK_Solicitudes_ModeloAuto FOREIGN KEY (idModelo) REFERENCES ModeloAuto(idModelo)
 );
